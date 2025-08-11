@@ -10,12 +10,33 @@
   .entry-title { font-weight: bold; font-size: 1.1em; }
   .url-base { font-family: monospace; margin-top: 4px; margin-bottom: 10px; }
   .values-list { margin-left: 0; padding-left: 0; list-style: none; }
-  .value-item { display: flex; align-items: center; margin-bottom: 6px; }
-  .value-link { flex-grow: 1; text-decoration: none; color: blue; word-break: break-all; font-family: monospace; }
-  button { margin-left: 6px; }
+  .value-item { display: flex; align-items: center; margin-bottom: 6px; gap: 4px; }
+  .value-link { text-decoration: none; color: blue; word-break: break-all; font-family: monospace; }
+  .comment { font-size: 0.9em; color: #555; margin-left: 6px; font-style: italic; }
+  button { margin-left: 4px; }
   label { display: block; margin: 8px 0 4px; }
   input[type="text"] { width: 100%; padding: 6px; box-sizing: border-box; }
   .controls { margin-top: 10px; }
+</style>
+<style>
+input[type="color"],
+input[type="date"],
+input[type="datetime"],
+input[type="datetime-local"],
+input[type="email"],
+input[type="month"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="text"],
+input[type="time"],
+input[type="url"],
+input[type="week"],
+select:focus,
+textarea {
+  font-size: 16px;
+}
 </style>
 </head>
 <body>
@@ -31,7 +52,7 @@
   <input id="baseInput" type="text" placeholder="e.g. https://example.com/search?q=<<V>>" />
   
   <label for="valuesInput">Values (comma-separated):</label>
-  <input id="valuesInput" type="text" placeholder="e.g. apple, banana, cherry" />
+  <input id="valuesInput" type="text" placeholder="e.g. apple, banana, cherry" style="margin-bottom: 10px"/>
   
   <button onclick="addEntry()">Add Entry</button>
   <button onclick="exportEntries()">Export Entries</button>
@@ -46,13 +67,32 @@
 </section>
 
 <script>
+  function reverseString(str){
+    return str.split('').reverse().join('');
+  }
+  
   let entries = JSON.parse(localStorage.getItem('baseUrlEntries') || '{}');
+
+  // Ensure old data format gets converted
+  function normalizeData() {
+    for (const key in entries) {
+      if (Array.isArray(entries[key].values)) {
+        entries[key].values = entries[key].values.map(v => {
+          if (typeof v === 'string') {
+            return { val: v, comment: '' };
+          }
+          return v;
+        });
+      }
+    }
+  }
 
   function saveEntries() {
     localStorage.setItem('baseUrlEntries', JSON.stringify(entries));
   }
 
   function renderEntries() {
+    normalizeData();
     const container = document.getElementById('entriesContainer');
     container.innerHTML = '';
 
@@ -60,7 +100,6 @@
       const div = document.createElement('div');
       div.className = 'entry';
 
-      // Header with title and buttons
       const header = document.createElement('div');
       header.className = 'entry-header';
 
@@ -69,21 +108,18 @@
       titleEl.textContent = title;
       header.appendChild(titleEl);
 
-      // Buttons container
       const btnContainer = document.createElement('div');
 
-      // Open All button
       const openAllBtn = document.createElement('button');
       openAllBtn.textContent = 'Open All';
       openAllBtn.onclick = () => {
         entry.values.forEach(v => {
-          const url = entry.base.replace('<<V>>', v);
+          const url = entry.base.replace('<<V>>', v.val);
           window.open(url, '_blank', 'noopener,noreferrer');
         });
       };
       btnContainer.appendChild(openAllBtn);
 
-      // Delete Entry button with confirmation
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = 'Delete';
       deleteBtn.onclick = () => {
@@ -98,35 +134,54 @@
       header.appendChild(btnContainer);
       div.appendChild(header);
 
-      // Show base URL
       const baseUrlEl = document.createElement('div');
       baseUrlEl.className = 'url-base';
       baseUrlEl.textContent = 'Base URL: ' + entry.base;
       div.appendChild(baseUrlEl);
 
-      // Values list with remove buttons
       const valuesList = document.createElement('ul');
       valuesList.className = 'values-list';
 
-      entry.values.forEach((val, i) => {
+      entry.values.forEach((obj, i) => {
         const li = document.createElement('li');
         li.className = 'value-item';
 
         const a = document.createElement('a');
-        a.href = entry.base.replace('<<V>>', val);
+        a.href = entry.base.replace('<<V>>', obj.val);
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
-        a.textContent = val;
+        a.textContent = obj.val;
         a.className = 'value-link';
         li.appendChild(a);
+
+        if (obj.comment) {
+          const cmt = document.createElement('span');
+          cmt.className = 'comment';
+          cmt.textContent = `(${obj.comment})`;
+          li.appendChild(cmt);
+        }
+
+        const editCmtBtn = document.createElement('button');
+        editCmtBtn.textContent = 'Comment';
+        editCmtBtn.onclick = () => {
+          const newComment = prompt(`Edit comment for "${obj.val}":`, obj.comment || '');
+          if (newComment !== null) {
+            obj.comment = newComment.trim();
+            saveEntries();
+            renderEntries();
+          }
+        };
+        li.appendChild(editCmtBtn);
 
         const removeValBtn = document.createElement('button');
         removeValBtn.textContent = 'X';
         removeValBtn.title = 'Remove this value';
         removeValBtn.onclick = () => {
-          entry.values.splice(i, 1);
-          saveEntries();
-          renderEntries();
+          if (confirm(`Are you sure you want to delete "${obj.val}"?`)) {
+            entry.values.splice(i, 1);
+            saveEntries();
+            renderEntries();
+          }
         };
         li.appendChild(removeValBtn);
 
@@ -134,27 +189,27 @@
       });
       div.appendChild(valuesList);
 
-      // Add Value button and input
       const addValueContainer = document.createElement('div');
       addValueContainer.className = 'controls';
 
       const addValueInput = document.createElement('input');
       addValueInput.type = 'text';
       addValueInput.placeholder = 'Add new value...';
-      addValueInput.style.width = '70%';
-      addValueInput.onkeydown = e => {
-        if (e.key === 'Enter') {
-          addValueBtn.click();
-        }
-      };
+      addValueInput.style.width = '50%';
       addValueContainer.appendChild(addValueInput);
+
+      const addCommentInput = document.createElement('input');
+      addCommentInput.type = 'text';
+      addCommentInput.placeholder = 'Optional comment...';
+      addCommentInput.style.width = '40%';
+      addValueContainer.appendChild(addCommentInput);
 
       const addValueBtn = document.createElement('button');
       addValueBtn.textContent = 'Add Value';
       addValueBtn.onclick = () => {
         const val = addValueInput.value.trim();
         if (!val) return alert('Please enter a value.');
-        entry.values.push(val);
+        entry.values.push({ val, comment: addCommentInput.value.trim() });
         saveEntries();
         renderEntries();
       };
@@ -172,25 +227,23 @@
     let valuesRaw = document.getElementById('valuesInput').value.trim();
 
     if (!title) return alert('Please enter a title.');
-	if (entries[title]) return alert('Entry under that title already exists.')
-	
+    if (entries[title]) return alert('Entry under that title already exists.');
     if (!base || !base.includes('<<V>>')) return alert('Base URL must include the <<V>> placeholder.');
-    if (!valuesRaw){valuesRaw = ''};
+    if (!valuesRaw) valuesRaw = '';
 
-    const values = valuesRaw.split(',').map(v => v.trim()).filter(v => v);
+    const values = valuesRaw.split(',').map(v => v.trim()).filter(v => v).map(v => ({ val: v, comment: '' }));
 
     entries[title] = { base, values };
     saveEntries();
     renderEntries();
 
-    // Clear inputs
     document.getElementById('titleInput').value = '';
     document.getElementById('baseInput').value = '';
     document.getElementById('valuesInput').value = '';
   }
 
   function exportEntries() {
-    const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+    const blob = new Blob([reverseString(JSON.stringify(entries, null, 2))], { type: 'application/charlie' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -202,7 +255,7 @@
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        const imported = JSON.parse(e.target.result);
+        const imported = JSON.parse(reverseString(e.target.result));
         if (typeof imported === 'object' && imported !== null) {
           entries = imported;
           saveEntries();
@@ -213,14 +266,14 @@
       } catch {
         alert('Error parsing JSON file.');
       }
-      event.target.value = ''; // reset input so same file can be re-imported
+      event.target.value = '';
     };
     reader.readAsText(file);
   }
 
+  normalizeData();
   renderEntries();
 </script>
 
 </body>
 </html>
-
