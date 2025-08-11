@@ -242,12 +242,34 @@ textarea {
     document.getElementById('valuesInput').value = '';
   }
 
-  function exportEntries() {
-    const blob = new Blob([reverseString(JSON.stringify(entries))], { name: 'save.charlie', type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
+function exportEntries() {
+  const payload = reverseString(JSON.stringify(entries));
+  const fileBlob = new Blob([payload], { type: 'application/octet-stream' });
+  const fileUrl = URL.createObjectURL(fileBlob);
+
+  const html = `<!doctype html>
+<meta charset="utf-8">
+<title>save.charlie</title>
+<body style="font-family:system-ui, -apple-system, Roboto, Arial; padding:24px">
+  <h2>Download save.charlie</h2>
+  <p>If the file doesn't start automatically, click the link below to download it:</p>
+  <a id="dl" href="${fileUrl}" download="save.charlie">Download save.charlie</a>
+  <p style="margin-top:1rem;color:#666;font-size:0.9rem">Close this tab after downloading.</p>
+</body>`;
+
+  const htmlBlob = new Blob([html], { type: 'text/html' });
+  const htmlUrl = URL.createObjectURL(htmlBlob);
+
+  // Open the interstitial download page in a new tab
+  window.open(htmlUrl, '_blank');
+
+  // cleanup after a short while
+  setTimeout(() => {
+    URL.revokeObjectURL(fileUrl);
+    URL.revokeObjectURL(htmlUrl);
+  }, 120_000);
+}
+
 
   function importEntries(event) {
     const file = event.target.files[0];
